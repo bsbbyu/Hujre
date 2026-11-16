@@ -48,10 +48,28 @@ local function travelToOfficeWaypoints()
         if not hrp or not humanoid then return end
 
         for _, targetCFrame in ipairs(OfficeWaypoints) do
-            -- Pindah bertahap ke tiap waypoint
             hrp.CFrame = targetCFrame
             task.wait(1) -- Jeda 1 detik per waypoint sesuai request
         end
+    end)
+end
+
+-- Fungsi Pemicu Awal saat Toggle Auto Farm Dinyalakan di UI (Yobuy.lua)
+local function startInitialFarm()
+    pcall(function()
+        autoSelectJob()
+        task.wait(3) -- Jeda 3 detik sesuai request
+
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- Seated Teleport ke waypoint pertama
+        hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
+        task.wait(1)
+
+        -- Jalan beruntun lewat semua waypoint sampai ke kursi deket printer 3
+        travelToOfficeWaypoints()
     end)
 end
 
@@ -61,16 +79,13 @@ local function returnToSeat(printerName)
         autoSelectJob()
         task.wait(3)
 
-        -- Teleport awal ke waypoint pertama, lalu jalankan rute beruntun
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        -- Seated Teleport ke titik awal rute (-876.491, 2.788, -627.639)
         hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
         task.wait(1)
 
-        -- Eksekusi jalan lewat semua waypoint sampai ke kursi deket printer 3
         travelToOfficeWaypoints()
     end)
 end
@@ -98,7 +113,7 @@ local function walkToActivePrinter()
             attempts = attempts + 1
 
             for i = 1, 5 do
-                local pName = "Print_" .. i
+                local pName = "Print_" + i
                 local printerModel = ComputersFolder:FindFirstChild(pName)
                 
                 if printerModel then
@@ -176,7 +191,9 @@ local function walkToActivePrinter()
     end)
 end
 
+-- Daftarkan fungsi ke global environment supaya bisa dipanggil dari Yobuy.lua
 getgenv().RunManualPrinter = walkToActivePrinter
+getgenv().RunInitialFarm = startInitialFarm
 
 local function solveOfficeTask()
     pcall(function()
@@ -248,10 +265,4 @@ AssignPrintJob.OnClientEvent:Connect(function()
     if not getgenv().AutoFarmActive then return end
     task.wait(0.5)
     walkToActivePrinter()
-end)
-
--- Inisialisasi awal saat skrip dimuat
-task.spawn(function()
-    task.wait(2)
-    autoSelectJob()
 end)
