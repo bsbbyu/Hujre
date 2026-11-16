@@ -1,3 +1,6 @@
+-- ==========================================
+-- Hujre.lua - KEREN HUB (BOT LOGIC & AUTO FARM)
+-- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PathfindingService = game:GetService("PathfindingService")
@@ -16,6 +19,61 @@ local PrinterCoordinates = {
     ["Print_4"] = Vector3.new(-5868.426, 5.982, -213.191),
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
+
+-- Rute Waypoints Custom menuju ke area Office / Kursi deket Printer 3
+local OfficeWaypoints = {
+    CFrame.new(-876.491, 2.788, -627.639),
+    CFrame.new(-1727.164, 37.488, -575.180),
+    CFrame.new(-3162.552, 2.788, -548.694),
+    CFrame.new(-4445.568, 2.759, -554.887),
+    CFrame.new(-5936.579, 2.759, -553.939),
+    CFrame.new(-5988.250, 4.624, -254.500) -- Titik akhir (kursi deket printer 3)
+}
+
+local function autoSelectJob()
+    pcall(function()
+        local event = JobEvents:FindFirstChild("TeamChangeRequest")
+        if event then
+            event:FireServer("Office Worker", 11378976, 0, 0, "Detector")
+        end
+    end)
+end
+
+-- Fungsi Perjalanan Beruntun Melewati Waypoint Custom (Jeda 1 detik)
+local function travelToOfficeWaypoints()
+    pcall(function()
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not humanoid then return end
+
+        for _, targetCFrame in ipairs(OfficeWaypoints) do
+            -- Pindah bertahap ke tiap waypoint
+            hrp.CFrame = targetCFrame
+            task.wait(1) -- Jeda 1 detik per waypoint sesuai request
+        end
+    end)
+end
+
+local function returnToSeat(printerName)
+    pcall(function()
+        -- Alur: Selesai print -> Select job -> Jeda 3 detik -> Seated Teleport / Jalan Waypoints
+        autoSelectJob()
+        task.wait(3)
+
+        -- Teleport awal ke waypoint pertama, lalu jalankan rute beruntun
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- Seated Teleport ke titik awal rute (-876.491, 2.788, -627.639)
+        hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
+        task.wait(1)
+
+        -- Eksekusi jalan lewat semua waypoint sampai ke kursi deket printer 3
+        travelToOfficeWaypoints()
+    end)
+end
 
 local function walkToActivePrinter()
     pcall(function()
@@ -91,7 +149,7 @@ local function walkToActivePrinter()
                     
                     local reached = false
                     local conn
-                    conn = humanoid.MoveToFinished:Connect(function(isReached)
+                    conn = humanoid.MoveToFinished:Connect(function()
                         reached = true
                         if conn then conn:Disconnect() end
                     end)
@@ -111,6 +169,9 @@ local function walkToActivePrinter()
             if targetPrompt and fireproximityprompt then
                 fireproximityprompt(targetPrompt)
             end
+
+            task.wait(0.8)
+            returnToSeat(targetPrinterName)
         end
     end)
 end
@@ -187,4 +248,10 @@ AssignPrintJob.OnClientEvent:Connect(function()
     if not getgenv().AutoFarmActive then return end
     task.wait(0.5)
     walkToActivePrinter()
+end)
+
+-- Inisialisasi awal saat skrip dimuat
+task.spawn(function()
+    task.wait(2)
+    autoSelectJob()
 end)
