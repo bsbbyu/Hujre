@@ -27,7 +27,7 @@ local OfficeWaypoints = {
     CFrame.new(-3162.552, 2.788, -548.694),
     CFrame.new(-4445.568, 2.759, -554.887),
     CFrame.new(-5936.579, 2.759, -553.939),
-    CFrame.new(-5988.250, 4.624, -254.500) -- Titik akhir (kursi deket printer 3)
+    CFrame.new(-5988.250, 4.624, -254.500) -- Titik akhir di area printer 3
 }
 
 local function autoSelectJob()
@@ -39,8 +39,11 @@ local function autoSelectJob()
     end)
 end
 
+-- Deklarasi awal fungsi printer supaya bisa dipanggil di dalam waypoint
+local walkToActivePrinter
+
 -- Fungsi Perjalanan Beruntun dengan Seated Teleport & Anti-Pingsan (Jump Fix)
-local function travelToOfficeWaypoints()
+local function travelToOfficeWaypoints(onComplete)
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -51,10 +54,16 @@ local function travelToOfficeWaypoints()
         for index, targetCFrame in ipairs(OfficeWaypoints) do
             hrp.CFrame = targetCFrame
             
-            -- Jika sudah di titik terakhir kantor, trigger jump biar gak pingsan/ragdoll
+            -- Jika sudah di titik terakhir kantor (kursi / area printer 3)
             if index == totalPoints then
                 task.wait(0.2)
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping) -- Supaya gak pingsan
+                task.wait(0.5)
+                
+                -- Begitu sampai di kantor, langsung jalankan callback (jalan ke printer)
+                if onComplete then
+                    onComplete()
+                end
             else
                 -- Waypoint biasa: duduk di angin sebentar, lalu bangunin lagi buat lanjut
                 humanoid.Sit = true
@@ -70,7 +79,7 @@ end
 local function startInitialFarm()
     pcall(function()
         autoSelectJob()
-        task.wait(3) -- Jeda 3 detik sesuai request
+        task.wait(3) -- Jeda 3 detik select job
 
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -85,33 +94,37 @@ local function startInitialFarm()
         hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
         task.wait(1)
 
-        -- Jalan beruntun lewat semua waypoint dengan seated teleport
-        travelToOfficeWaypoints()
+        -- Mulai rute, dan begitu sampai di kursi kantor, langsung suruh jalan ke printer aktif
+        travelToOfficeWaypoints(function()
+            walkToActivePrinter()
+        end)
     end)
 end
 
+-- Fungsi Selesai Nge-print: Balik ke Kursi Kantor, lalu seated teleport lagi ke area printer
 local function returnToSeat(printerName)
     pcall(function()
-        autoSelectJob()
-        task.wait(3)
-
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        -- Duduk dulu di tempat printer sebelum balik
+        -- Duduk dulu sebentar di area printer sebelum balik ke kursi utama
         humanoid.Sit = true
         task.wait(1)
 
+        -- Teleport balik ke titik awal waypoint (kursi standby)
         hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
         task.wait(1)
 
-        travelToOfficeWaypoints()
+        -- Lakukan seated teleport lagi untuk kembali ke area printer/kantor secara looping
+        travelToOfficeWaypoints(function()
+            walkToActivePrinter()
+        end)
     end)
 end
 
-local function walkToActivePrinter()
+walkToActivePrinter = function()
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
