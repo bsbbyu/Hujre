@@ -30,6 +30,9 @@ local OfficeWaypoints = {
     CFrame.new(-5967.168, 4.643, -260.844) -- Titik akhir pas di kursi dekat printer 3
 }
 
+-- Koordinat kursi standby dekat printer 3 untuk rute jalan kaki balik
+local OfficeSeatPos = Vector3.new(-5967.168, 4.643, -260.844)
+
 local function autoSelectJob()
     pcall(function()
         local event = JobEvents:FindFirstChild("TeamChangeRequest")
@@ -102,7 +105,7 @@ local function startInitialFarm()
     end)
 end
 
--- Fungsi Selesai Nge-print: Balik ke Kursi Awal waypoint, lalu seated teleport lagi ke kantor
+-- Fungsi Selesai Nge-print: Jalan kaki balik ke kursi kantor, duduk, lalu lanjut kerjaan berikutnya
 local function returnToSeat(printerName)
     pcall(function()
         local char = LocalPlayer.Character
@@ -110,18 +113,53 @@ local function returnToSeat(printerName)
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        -- Duduk dulu sebentar di area printer sebelum balik
+        task.wait(0.5) -- Jeda sebentar pasca tugas beres
+
+        -- Jalan kaki pakai Pathfinding balik ke kursi dekat printer 3
+        local path = PathfindingService:CreatePath({
+            AgentRadius = 2,
+            AgentHeight = 5,
+            AgentCanJump = true
+        })
+
+        path:ComputeAsync(hrp.Position, OfficeSeatPos)
+        
+        if path.Status == Enum.PathStatus.Success then
+            local waypoints = path:GetWaypoints()
+            for _, waypoint in ipairs(waypoints) do
+                humanoid:MoveTo(waypoint.Position)
+                if waypoint.Action == Enum.PathWaypointAction.Jump then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+                
+                local reached = false
+                local conn
+                conn = humanoid.MoveToFinished:Connect(function()
+                    reached = true
+                    if conn then conn:Disconnect() end
+                end)
+                
+                local t = tick()
+                while not reached and (tick() - t) < 0.8 do
+                    task.wait(0.05)
+                end
+                if conn then conn:Disconnect() end
+            end
+        else
+            -- Fallback jalan biasa kalau pathfinding mentok
+            humanoid:MoveTo(OfficeSeatPos)
+            task.wait(2)
+        end
+
+        -- Nyampe di kursi, duduk manis sebentar
+        task.wait(0.3)
         humanoid.Sit = true
         task.wait(1)
 
-        -- Teleport balik ke titik awal waypoint (lobi/start)
-        hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
-        task.wait(1)
-
-        -- Lakukan seated teleport lagi menuju ke kursi dekat printer 3 secara looping
-        travelToOfficeWaypoints(function()
-            walkToActivePrinter()
-        end)
+        -- Berdiri lagi, terus lanjut jalan ke printer aktif berikutnya (Looping)
+        humanoid.Sit = false
+        task.wait(0.2)
+        walkToActivePrinter()
     end)
 end
 
