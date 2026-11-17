@@ -20,14 +20,14 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
--- Rute Waypoints Custom menuju ke area Office / Kursi deket Printer 3
+-- Rute Waypoints Custom menuju ke area Office dengan titik akhir pas di kursi dekat printer 3
 local OfficeWaypoints = {
     CFrame.new(-876.491, 2.788, -627.639),
     CFrame.new(-1727.164, 37.488, -575.180),
     CFrame.new(-3162.552, 2.788, -548.694),
     CFrame.new(-4445.568, 2.759, -554.887),
     CFrame.new(-5936.579, 2.759, -553.939),
-    CFrame.new(-5988.250, 4.624, -254.500) -- Titik akhir di area printer 3
+    CFrame.new(-5967.168, 4.643, -260.844) -- Titik akhir pas di kursi dekat printer 3
 }
 
 local function autoSelectJob()
@@ -39,7 +39,7 @@ local function autoSelectJob()
     end)
 end
 
--- Deklarasi awal fungsi printer supaya bisa dipanggil di dalam waypoint
+-- Deklarasi awal fungsi printer
 local walkToActivePrinter
 
 -- Fungsi Perjalanan Beruntun dengan Seated Teleport & Anti-Pingsan (Jump Fix)
@@ -54,18 +54,19 @@ local function travelToOfficeWaypoints(onComplete)
         for index, targetCFrame in ipairs(OfficeWaypoints) do
             hrp.CFrame = targetCFrame
             
-            -- Jika sudah di titik terakhir kantor (kursi / area printer 3)
+            -- Jika sudah di titik terakhir (kursi dekat printer 3)
             if index == totalPoints then
                 task.wait(0.2)
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping) -- Supaya gak pingsan
-                task.wait(0.5)
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping) -- Anti pingsan
+                task.wait(0.3)
+                humanoid.Sit = true -- Duduk manis di kursi tujuan
                 
-                -- Begitu sampai di kantor, langsung jalankan callback (jalan ke printer)
+                -- Jalankan callback (lanjut jalan ke printer aktif)
                 if onComplete then
                     onComplete()
                 end
             else
-                -- Waypoint biasa: duduk di angin sebentar, lalu bangunin lagi buat lanjut
+                -- Waypoint biasa: duduk di angin sebentar, lalu bangunin buat lanjut
                 humanoid.Sit = true
                 task.wait(1)
                 humanoid.Sit = false
@@ -101,7 +102,7 @@ local function startInitialFarm()
     end)
 end
 
--- Fungsi Selesai Nge-print: Balik ke Kursi Kantor, lalu seated teleport lagi ke area printer
+-- Fungsi Selesai Nge-print: Balik ke Kursi Awal waypoint, lalu seated teleport lagi ke kantor
 local function returnToSeat(printerName)
     pcall(function()
         local char = LocalPlayer.Character
@@ -109,15 +110,15 @@ local function returnToSeat(printerName)
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        -- Duduk dulu sebentar di area printer sebelum balik ke kursi utama
+        -- Duduk dulu sebentar di area printer sebelum balik
         humanoid.Sit = true
         task.wait(1)
 
-        -- Teleport balik ke titik awal waypoint (kursi standby)
+        -- Teleport balik ke titik awal waypoint (lobi/start)
         hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
         task.wait(1)
 
-        -- Lakukan seated teleport lagi untuk kembali ke area printer/kantor secara looping
+        -- Lakukan seated teleport lagi menuju ke kursi dekat printer 3 secara looping
         travelToOfficeWaypoints(function()
             walkToActivePrinter()
         end)
@@ -225,7 +226,7 @@ walkToActivePrinter = function()
     end)
 end
 
--- Daftarkan fungsi ke global environment supaya bisa dipanggil dari Yobuy.lua
+-- Daftarkan fungsi ke global environment supaya bisa dikontrol dari Yobuy.lua
 getgenv().RunManualPrinter = walkToActivePrinter
 getgenv().RunInitialFarm = startInitialFarm
 
