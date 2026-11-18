@@ -1,5 +1,5 @@
 -- ==========================================
--- Hujre.lua - KEREN HUB (BOT LOGIC & AUTO FARM)
+-- Hujre.lua - KEREN HUB (BOT LOGIc & AUTO FARM)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,18 +20,24 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
--- Rute Waypoints Custom menuju ke area Office dengan titik akhir pas di kursi dekat printer 3
+-- Tabel koordinat kursi khusus di dekat masing-masing printer
+local PrinterSeats = {
+    ["Print_1"] = Vector3.new(-5968.743, 4.643, -228.440),
+    ["Print_2"] = Vector3.new(-5968.743, 4.643, -228.440),
+    ["Print_3"] = Vector3.new(-5967.168, 4.643, -260.844),
+    ["Print_4"] = Vector3.new(-5878.439, 4.643, -228.620),
+    ["Print_5"] = Vector3.new(-5880.500, 4.643, -261.013),
+}
+
+-- Rute Waypoints Custom menuju ke area Office (Titik akhir default di kursi printer 3 untuk inisialisasi awal)
 local OfficeWaypoints = {
     CFrame.new(-876.491, 2.788, -627.639),
     CFrame.new(-1727.164, 37.488, -575.180),
     CFrame.new(-3162.552, 2.788, -548.694),
     CFrame.new(-4445.568, 2.759, -554.887),
     CFrame.new(-5936.579, 2.759, -553.939),
-    CFrame.new(-5967.168, 4.643, -260.844) -- Titik akhir pas di kursi dekat printer 3
+    CFrame.new(-5967.168, 4.643, -260.844)
 }
-
--- Koordinat kursi standby dekat printer 3 untuk rute jalan kaki balik
-local OfficeSeatPos = Vector3.new(-5967.168, 4.643, -260.844)
 
 local function autoSelectJob()
     pcall(function()
@@ -57,19 +63,16 @@ local function travelToOfficeWaypoints(onComplete)
         for index, targetCFrame in ipairs(OfficeWaypoints) do
             hrp.CFrame = targetCFrame
             
-            -- Jika sudah di titik terakhir (kursi dekat printer 3)
             if index == totalPoints then
                 task.wait(0.2)
                 humanoid:ChangeState(Enum.HumanoidStateType.Jumping) -- Anti pingsan
                 task.wait(0.3)
-                humanoid.Sit = true -- Duduk manis di kursi tujuan
+                humanoid.Sit = true
                 
-                -- Jalankan callback (lanjut jalan ke printer aktif)
                 if onComplete then
                     onComplete()
                 end
             else
-                -- Waypoint biasa: duduk di angin sebentar, lalu bangunin buat lanjut
                 humanoid.Sit = true
                 task.wait(1)
                 humanoid.Sit = false
@@ -83,29 +86,26 @@ end
 local function startInitialFarm()
     pcall(function()
         autoSelectJob()
-        task.wait(3) -- Jeda 3 detik select job
+        task.wait(3)
 
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        -- Duduk dulu di posisi awal sebelum mulai rute
         humanoid.Sit = true
         task.wait(1)
 
-        -- Lempar ke waypoint pertama
         hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
         task.wait(1)
 
-        -- Mulai rute, dan begitu sampai di kursi kantor, langsung suruh jalan ke printer aktif
         travelToOfficeWaypoints(function()
             walkToActivePrinter()
         end)
     end)
 end
 
--- Fungsi Selesai Nge-print: Jalan kaki balik ke kursi kantor, duduk, lalu lanjut kerjaan berikutnya
+-- Fungsi Selesai Nge-print: Jalan kaki balik ke kursi yang SESUAI dengan printer tempat dia kerja
 local function returnToSeat(printerName)
     pcall(function()
         local char = LocalPlayer.Character
@@ -113,16 +113,19 @@ local function returnToSeat(printerName)
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        task.wait(0.5) -- Jeda sebentar pasca tugas beres
+        task.wait(0.5)
 
-        -- Jalan kaki pakai Pathfinding balik ke kursi dekat printer 3
+        -- Ambil koordinat kursi spesifik berdasarkan printer (fallback ke printer 3 kalau gak ketemu)
+        local targetSeatPos = PrinterSeats[printerName] or Vector3.new(-5967.168, 4.643, -260.844)
+
+        -- Jalan kaki pakai Pathfinding balik ke kursi printer tersebut
         local path = PathfindingService:CreatePath({
             AgentRadius = 2,
             AgentHeight = 5,
             AgentCanJump = true
         })
 
-        path:ComputeAsync(hrp.Position, OfficeSeatPos)
+        path:ComputeAsync(hrp.Position, targetSeatPos)
         
         if path.Status == Enum.PathStatus.Success then
             local waypoints = path:GetWaypoints()
@@ -146,8 +149,7 @@ local function returnToSeat(printerName)
                 if conn then conn:Disconnect() end
             end
         else
-            -- Fallback jalan biasa kalau pathfinding mentok
-            humanoid:MoveTo(OfficeSeatPos)
+            humanoid:MoveTo(targetSeatPos)
             task.wait(2)
         end
 
@@ -156,7 +158,7 @@ local function returnToSeat(printerName)
         humanoid.Sit = true
         task.wait(1)
 
-        -- Berdiri lagi, terus lanjut jalan ke printer aktif berikutnya (Looping)
+        -- Berdiri lagi, lalu lanjut jalan ke printer aktif berikutnya (Looping)
         humanoid.Sit = false
         task.wait(0.2)
         walkToActivePrinter()
@@ -258,7 +260,18 @@ walkToActivePrinter = function()
                 fireproximityprompt(targetPrompt)
             end
 
-            task.wait(0.8)
+            -- Tunggu sampai soal math / WorkGui selesai dikerjakan & tertutup
+            local timeout = tick() + 12
+            while tick() < timeout do
+                local workGui = PlayerGui:FindFirstChild("WorkGui")
+                if not workGui then
+                    break -- Keluar loop kalau WorkGui udah hilang (tugas beres)
+                end
+                task.wait(0.5)
+            end
+
+            task.wait(1)
+            -- Jalan kaki balik ke kursi yang SESUAI dengan printer tempat dia baru kerja
             returnToSeat(targetPrinterName)
         end
     end)
