@@ -1,20 +1,14 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (SINGLE JUMP FIX DI AKHIR)
+-- CLEAN TEST SCRIPT: NUNGGU DIPANGGIL -> JALAN -> AUTO SOLVE -> SOAL BERES -> LOMPAT -> JALAN KE KURSI
 -- ==========================================
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PathfindingService = game:GetService("PathfindingService")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local JobEvents = ReplicatedStorage:WaitForChild("JobEvents")
-local AssignPrintJob = JobEvents:WaitForChild("AssignPrintJob")
 local ComputersFolder = Workspace:WaitForChild("Computers")
 
-local AutoFarmActive = true
-
--- Data Koordinat Pasti Printer
 local PrinterCoordinates = {
     ["Print_1"] = Vector3.new(-6008.849, 5.956, -210.805),
     ["Print_2"] = Vector3.new(-6008.840, 5.966, -224.522),
@@ -23,7 +17,6 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
--- Data Kursi Spesifik Masing-Masing Printer
 local PrinterSeats = {
     ["Print_1"] = Vector3.new(-5968.743, 4.643, -228.440),
     ["Print_2"] = Vector3.new(-5968.743, 4.643, -228.440),
@@ -32,279 +25,170 @@ local PrinterSeats = {
     ["Print_5"] = Vector3.new(-5880.500, 4.643, -261.013),
 }
 
-print("==========================================")
-print("[Keren Hub] Ultimate Office Bot Active (Single Jump Fix)!")
-print("==========================================")
-
--- Forward declaration fungsi utama
-local walkToActivePrinter
-
--- ==========================================
--- FUNGSI JALAN KAKI DENGAN PATHFINDING & FALLBACK
--- ==========================================
 local function walkToPosition(targetPos)
-    pcall(function()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not humanoid then return end
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return end
 
-        local path = PathfindingService:CreatePath({
-            AgentRadius = 2,
-            AgentHeight = 5,
-            AgentCanJump = true
-        })
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 2,
+        AgentHeight = 5,
+        AgentCanJump = true
+    })
 
-        path:ComputeAsync(hrp.Position, targetPos)
-        
-        if path.Status == Enum.PathStatus.Success then
-            local waypoints = path:GetWaypoints()
-            for _, waypoint in ipairs(waypoints) do
-                humanoid:MoveTo(waypoint.Position)
-                if waypoint.Action == Enum.PathWaypointAction.Jump then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                end
-                
-                local reached = false
-                local conn
-                conn = humanoid.MoveToFinished:Connect(function()
-                    reached = true
-                    if conn then conn:Disconnect() end
-                end)
-                
-                local t = tick()
-                while not reached and (tick() - t) < 0.8 do
-                    task.wait(0.05)
-                end
-                if conn then conn:Disconnect() end
-            end
-        else
-            humanoid:MoveTo(targetPos)
-            task.wait(1.5)
-        end
-    end)
-end
-
--- ==========================================
--- FUNGSI KEMBALI KE KURSI PRINTER MASING-MASING
--- ==========================================
-local function returnToSeat(printerName)
-    pcall(function()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not humanoid then return end
-
-        task.wait(0.5)
-        local targetSeatPos = PrinterSeats[printerName] or Vector3.new(-5967.168, 4.643, -260.844)
-
-        print("[Keren Hub] Tugas beres, berjalan kaki kembali ke kursi " .. printerName)
-        walkToPosition(targetSeatPos)
-
-        task.wait(0.3)
-        humanoid.Sit = true
-        task.wait(1)
-
-        -- Siap lanjut cari printer aktif berikutnya (Looping)
-        humanoid.Sit = false
-        task.wait(0.2)
-        walkToActivePrinter()
-    end)
-end
-
--- ==========================================
--- FUNGSI UTAMA: DETEKSI & JALAN KE PRINTER
--- ==========================================
-walkToActivePrinter = function()
-    pcall(function()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not humanoid then return end
-
-        -- 1. Lepas dari kursi dulu & beri waktu transisi
-        if humanoid.SeatPart then
-            humanoid.Sit = false
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            task.wait(1)
-        end
-
-        local targetPrinterName = nil
-        local targetPos = nil
-        local targetPrompt = nil
-        local foundActive = false
-
-        -- 2. Sistem Polling / Retry Deteksi Printer Aktif
-        local attempts = 0
-        while not foundActive and attempts < 15 do
-            attempts = attempts + 1
-
-            for i = 1, 5 do
-                local pName = "Print_" .. i
-                local printerModel = ComputersFolder:FindFirstChild(pName)
-                
-                if printerModel then
-                    local isPromptEnabled = false
-                    local foundPrompt = nil
-
-                    for _, descendant in ipairs(printerModel:GetDescendants()) do
-                        if descendant:IsA("ProximityPrompt") then
-                            foundPrompt = descendant
-                            if descendant.Enabled then
-                                isPromptEnabled = true
-                            end
-                            break
-                        end
-                    end
-
-                    if isPromptEnabled and foundPrompt then
-                        targetPrinterName = pName
-                        targetPos = PrinterCoordinates[pName]
-                        targetPrompt = foundPrompt
-                        foundActive = true
-                        break
-                    end
-                end
-            end
-
-            if not foundActive then
-                task.wait(0.4)
-            end
-        end
-
-        -- 3. Eksekusi Perjalanan ke Printer Target
-        if targetPos and targetPrinterName then
-            print("[Keren Hub] Menuju ke tujuan aktif: " .. targetPrinterName)
-            
-            -- Jalan kaki pakai pathfinding ke printer
-            walkToPosition(targetPos + Vector3.new(0, 0, 1.5))
-            task.wait(0.3)
-
-            -- Langsung interaksi ProximityPrompt (Tanpa lompat pertama)
-            if targetPrompt and fireproximityprompt then
-                fireproximityprompt(targetPrompt)
-                print("• Berhasil interaksi dengan " .. targetPrinterName)
-            else
-                print("[Keren Hub] Warning: Gagal mengeksekusi fireproximityprompt.")
-            end
-
-            -- Tunggu sampai WorkGui (soal math) muncul
-            local startTime = tick()
-            local workGuiFound = false
-            while tick() - startTime < 4 do
-                if PlayerGui:FindFirstChild("WorkGui") then
-                    workGuiFound = true
-                    break
-                end
-                task.wait(0.1)
-            end
-
-            -- Tunggu sampai semua soal math selesai dikerjakan (WorkGui tertutup)
-            if workGuiFound then
-                while PlayerGui:FindFirstChild("WorkGui") do
-                    task.wait(0.2)
-                end
-                print("[Keren Hub] Semua soal math selesai dikerjakan!")
-            else
-                task.wait(2)
-            end
-
-            task.wait(0.5)
-
-            -- JUMP FIX: Lompat sekali pas semua soal beres sebelum jalan balik
-            if humanoid then
-                humanoid.Sit = false
-                humanoid.PlatformStand = false
-                task.wait(0.1)
+    path:ComputeAsync(hrp.Position, targetPos)
+    
+    if path.Status == Enum.PathStatus.Success then
+        local waypoints = path:GetWaypoints()
+        for _, waypoint in ipairs(waypoints) do
+            humanoid:MoveTo(waypoint.Position)
+            if waypoint.Action == Enum.PathWaypointAction.Jump then
                 humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                humanoid.Jump = true
-                print("[Keren Hub] Soal selesai -> Karakter melompat!")
-                task.wait(0.8)
             end
-
-            -- Jalan kaki balik ke kursi printer yang sesuai
-            returnToSeat(targetPrinterName)
-        else
-            print("[Keren Hub] Gagal mendeteksi tujuan printer aktif (Waktu tunggu habis).")
-        end
-    end)
-end
-
--- ==========================================
--- FUNGSI AUTO SOLVER GUI (MATEMATIKA)
--- ==========================================
-local function solveOfficeTask()
-    pcall(function()
-        local workGui = PlayerGui:FindFirstChild("WorkGui")
-        if not workGui then return end
-
-        local questionLabel = workGui:FindFirstChild("QuestionLabel") or workGui:FindFirstChild("TextLabel")
-        if not questionLabel then return end
-
-        local rawText = questionLabel.Text
-        if not rawText or rawText == "" then return end
-
-        if not (rawText:find("%+") or rawText:find("%-")) then return end
-
-        local cleanExpr = rawText:gsub("=.*", ""):gsub("[^%d%+%-]", "")
-        local mathFunc = loadstring("return " .. cleanExpr)
-        if not mathFunc then return end
-
-        local success, result = pcall(mathFunc)
-        if not success or not result then return end
-        
-        local targetAnswer = tostring(result)
-
-        task.wait(math.random(10, 15) / 10)
-
-        local frame = workGui:FindFirstChild("Frame")
-        if not frame then return end
-
-        for _, obj in ipairs(frame:GetChildren()) do
-            if obj.Name == "AnswerButton" or obj:IsA("TextButton") then
-                local btnText = ""
-                if obj:IsA("TextButton") then
-                    btnText = obj.Text
-                else
-                    local lbl = obj:FindFirstChildOfClass("TextLabel")
-                    if lbl then btnText = lbl.Text end
-                end
-
-                local cleanBtnText = btnText:gsub("%D", "")
-
-                if cleanBtnText == targetAnswer or btnText == targetAnswer then
-                    if obj:IsA("GuiButton") then
-                        if firesignal then
-                            firesignal(obj.MouseButton1Click)
-                            firesignal(obj.Activated)
-                        else
-                            obj:Activate()
-                        end
-                    end
-                    
-                    task.wait(1.2)
-                    break
-                end
+            
+            local reached = false
+            local conn
+            conn = humanoid.MoveToFinished:Connect(function()
+                reached = true
+                if conn then conn:Disconnect() end
+            end)
+            
+            local t = tick()
+            while not reached and (tick() - t) < 0.8 do
+                task.wait(0.05)
             end
+            if conn then conn:Disconnect() end
         end
-    end)
-end
-
--- ==========================================
--- LOOP & EVENT LISTENER UTAMA
--- ==========================================
-task.spawn(function()
-    while AutoFarmActive do
-        task.wait(1)
-        solveOfficeTask()
+    else
+        humanoid:MoveTo(targetPos)
+        task.wait(1.5)
     end
-end)
+end
 
-AssignPrintJob.OnClientEvent:Connect(function()
-    if not AutoFarmActive then return end
+local function solveOfficeTask()
+    local workGui = PlayerGui:FindFirstChild("WorkGui")
+    if not workGui then return end
+
+    local questionLabel = workGui:FindFirstChild("QuestionLabel") or workGui:FindFirstChild("TextLabel")
+    if not questionLabel then return end
+
+    local rawText = questionLabel.Text
+    if not rawText or rawText == "" then return end
+
+    if not (rawText:find("%+") or rawText:find("%-")) then return end
+
+    local cleanExpr = rawText:gsub("=.*", ""):gsub("[^%d%+%-]", "")
+    local mathFunc = loadstring("return " .. cleanExpr)
+    if not mathFunc then return end
+
+    local success, result = pcall(mathFunc)
+    if not success or not result then return end
+    
+    local targetAnswer = tostring(result)
+    task.wait(math.random(5, 10) / 10)
+
+    local frame = workGui:FindFirstChild("Frame")
+    if not frame then return end
+
+    for _, obj in ipairs(frame:GetChildren()) do
+        if obj.Name == "AnswerButton" or obj:IsA("TextButton") then
+            local btnText = obj:IsA("TextButton") and obj.Text or (obj:FindFirstChildOfClass("TextLabel") and obj:FindFirstChildOfClass("TextLabel").Text or "")
+            local cleanBtnText = btnText:gsub("%D", "")
+
+            if cleanBtnText == targetAnswer or btnText == targetAnswer then
+                if obj:IsA("GuiButton") then
+                    if firesignal then
+                        firesignal(obj.MouseButton1Click)
+                        firesignal(obj.Activated)
+                    else
+                        obj:Activate()
+                    end
+                end
+                task.wait(1.0)
+                break
+            end
+        end
+    end
+end
+
+local function runTestCycle(testPrinterName)
+    print("[TEST] Memulai siklus untuk: " .. testPrinterName)
+    local targetPos = PrinterCoordinates[testPrinterName]
+    local targetSeat = PrinterSeats[testPrinterName]
+
+    if not targetPos or not targetSeat then 
+        print("[TEST] Nama printer tidak valid! Gunakan Print_1 sampai Print_5")
+        return 
+    end
+
+    -- 1. Jalan kaki ke printer target
+    print("[TEST] Berjalan kaki menuju " .. testPrinterName)
+    walkToPosition(targetPos + Vector3.new(0, 0, 1.5))
+    task.wait(0.3)
+
+    -- 2. Klik proximity prompt printer
+    local printerModel = ComputersFolder:FindFirstChild(testPrinterName)
+    if printerModel then
+        for _, desc in ipairs(printerModel:GetDescendants()) do
+            if desc:IsA("ProximityPrompt") and fireproximityprompt then
+                fireproximityprompt(desc)
+                break
+            end
+        end
+    end
+
+    -- 3. Tunggu WorkGui muncul lalu auto-solve semua soal math
+    print("[TEST] Menunggu dan mengerjakan semua soal math...")
+    local startTime = tick()
+    local guiFound = false
+    
+    while tick() - startTime < 4 do
+        if PlayerGui:FindFirstChild("WorkGui") then
+            guiFound = true
+            break
+        end
+        task.wait(0.1)
+    end
+
+    if guiFound then
+        while PlayerGui:FindFirstChild("WorkGui") do
+            solveOfficeTask()
+            task.wait(0.5)
+        end
+        print("[TEST] Semua soal math selesai dikerjakan!")
+    else
+        print("[TEST] WorkGui tidak muncul, lanjut...")
+    end
+
     task.wait(0.5)
-    walkToActivePrinter()
-end)
 
--- Eksekusi manual testing jika dibutuhkan
-getgenv().RunManualPrinter = walkToActivePrinter
+    -- 4. JUMP FIX: Lompat sekali pas semua soal beres sebelum jalan balik
+    local char = LocalPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.Sit = false
+        humanoid.PlatformStand = false
+        task.wait(0.1)
+        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        humanoid.Jump = true
+        print("[TEST] Soal selesai -> Karakter melompat!")
+        task.wait(0.8)
+    end
+
+    -- 5. Jalan kaki balik ke kursi printer terdekat
+    print("[TEST] Berjalan kaki kembali ke kursi " .. testPrinterName)
+    walkToPosition(targetSeat)
+
+    task.wait(0.3)
+    if humanoid then
+        humanoid.Sit = true
+    end
+    print("[TEST] Selesai! Berhasil duduk manis di kursi " .. testPrinterName)
+end
+
+-- Daftarkan ke global environment supaya bisa dipanggil manual via console executor:
+-- Contoh ketik di console: RunTest("Print_1") atau RunTest("Print_5")
+getgenv().RunTest = runTestCycle
+
+print("[TEST SCRIPT LOADED] Ketik RunTest('Print_1') sampai RunTest('Print_5') di console executor untuk mulai.")
