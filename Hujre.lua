@@ -1,5 +1,5 @@
 -- ==========================================
--- Hujre.lua - KEREN HUB (BOT LOGIc & AUTO FARM)
+-- KEREN HUB - ULTIMATE OFFICE BOT (SINGLE JUMP FIX DI AKHIR)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,6 +12,9 @@ local JobEvents = ReplicatedStorage:WaitForChild("JobEvents")
 local AssignPrintJob = JobEvents:WaitForChild("AssignPrintJob")
 local ComputersFolder = Workspace:WaitForChild("Computers")
 
+local AutoFarmActive = true
+
+-- Data Koordinat Pasti Printer
 local PrinterCoordinates = {
     ["Print_1"] = Vector3.new(-6008.849, 5.956, -210.805),
     ["Print_2"] = Vector3.new(-6008.840, 5.966, -224.522),
@@ -20,7 +23,7 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
--- Tabel koordinat kursi khusus di dekat masing-masing printer
+-- Data Kursi Spesifik Masing-Masing Printer
 local PrinterSeats = {
     ["Print_1"] = Vector3.new(-5968.743, 4.643, -228.440),
     ["Print_2"] = Vector3.new(-5968.743, 4.643, -228.440),
@@ -29,103 +32,30 @@ local PrinterSeats = {
     ["Print_5"] = Vector3.new(-5880.500, 4.643, -261.013),
 }
 
--- Rute Waypoints Custom menuju ke area Office (Titik akhir default di kursi printer 3 untuk inisialisasi awal)
-local OfficeWaypoints = {
-    CFrame.new(-876.491, 2.788, -627.639),
-    CFrame.new(-1727.164, 37.488, -575.180),
-    CFrame.new(-3162.552, 2.788, -548.694),
-    CFrame.new(-4445.568, 2.759, -554.887),
-    CFrame.new(-5936.579, 2.759, -553.939),
-    CFrame.new(-5967.168, 4.643, -260.844)
-}
+print("==========================================")
+print("[Keren Hub] Ultimate Office Bot Active (Single Jump Fix)!")
+print("==========================================")
 
-local function autoSelectJob()
-    pcall(function()
-        local event = JobEvents:FindFirstChild("TeamChangeRequest")
-        if event then
-            event:FireServer("Office Worker", 11378976, 0, 0, "Detector")
-        end
-    end)
-end
-
--- Deklarasi awal fungsi printer
+-- Forward declaration fungsi utama
 local walkToActivePrinter
 
--- Fungsi Perjalanan Beruntun dengan Seated Teleport & Anti-Pingsan (Jump Fix)
-local function travelToOfficeWaypoints(onComplete)
+-- ==========================================
+-- FUNGSI JALAN KAKI DENGAN PATHFINDING & FALLBACK
+-- ==========================================
+local function walkToPosition(targetPos)
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        local totalPoints = #OfficeWaypoints
-        for index, targetCFrame in ipairs(OfficeWaypoints) do
-            hrp.CFrame = targetCFrame
-            
-            if index == totalPoints then
-                task.wait(0.2)
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping) -- Anti pingsan
-                task.wait(0.3)
-                humanoid.Sit = true
-                
-                if onComplete then
-                    onComplete()
-                end
-            else
-                humanoid.Sit = true
-                task.wait(1)
-                humanoid.Sit = false
-                task.wait(0.1)
-            end
-        end
-    end)
-end
-
--- Fungsi Pemicu Awal saat Toggle Auto Farm Dinyalakan di UI (Yobuy.lua)
-local function startInitialFarm()
-    pcall(function()
-        autoSelectJob()
-        task.wait(3)
-
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not humanoid then return end
-
-        humanoid.Sit = true
-        task.wait(1)
-
-        hrp.CFrame = OfficeWaypoints[1] + Vector3.new(0, 2, 0)
-        task.wait(1)
-
-        travelToOfficeWaypoints(function()
-            walkToActivePrinter()
-        end)
-    end)
-end
-
--- Fungsi Selesai Nge-print: Jalan kaki balik ke kursi yang SESUAI dengan printer tempat dia kerja
-local function returnToSeat(printerName)
-    pcall(function()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not humanoid then return end
-
-        task.wait(0.5)
-
-        -- Ambil koordinat kursi spesifik berdasarkan printer (fallback ke printer 3 kalau gak ketemu)
-        local targetSeatPos = PrinterSeats[printerName] or Vector3.new(-5967.168, 4.643, -260.844)
-
-        -- Jalan kaki pakai Pathfinding balik ke kursi printer tersebut
         local path = PathfindingService:CreatePath({
             AgentRadius = 2,
             AgentHeight = 5,
             AgentCanJump = true
         })
 
-        path:ComputeAsync(hrp.Position, targetSeatPos)
+        path:ComputeAsync(hrp.Position, targetPos)
         
         if path.Status == Enum.PathStatus.Success then
             local waypoints = path:GetWaypoints()
@@ -149,22 +79,42 @@ local function returnToSeat(printerName)
                 if conn then conn:Disconnect() end
             end
         else
-            humanoid:MoveTo(targetSeatPos)
-            task.wait(2)
+            humanoid:MoveTo(targetPos)
+            task.wait(1.5)
         end
+    end)
+end
 
-        -- Nyampe di kursi, duduk manis sebentar
+-- ==========================================
+-- FUNGSI KEMBALI KE KURSI PRINTER MASING-MASING
+-- ==========================================
+local function returnToSeat(printerName)
+    pcall(function()
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not humanoid then return end
+
+        task.wait(0.5)
+        local targetSeatPos = PrinterSeats[printerName] or Vector3.new(-5967.168, 4.643, -260.844)
+
+        print("[Keren Hub] Tugas beres, berjalan kaki kembali ke kursi " .. printerName)
+        walkToPosition(targetSeatPos)
+
         task.wait(0.3)
         humanoid.Sit = true
         task.wait(1)
 
-        -- Berdiri lagi, lalu lanjut jalan ke printer aktif berikutnya (Looping)
+        -- Siap lanjut cari printer aktif berikutnya (Looping)
         humanoid.Sit = false
         task.wait(0.2)
         walkToActivePrinter()
     end)
 end
 
+-- ==========================================
+-- FUNGSI UTAMA: DETEKSI & JALAN KE PRINTER
+-- ==========================================
 walkToActivePrinter = function()
     pcall(function()
         local char = LocalPlayer.Character
@@ -172,6 +122,7 @@ walkToActivePrinter = function()
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
+        -- 1. Lepas dari kursi dulu & beri waktu transisi
         if humanoid.SeatPart then
             humanoid.Sit = false
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -183,12 +134,13 @@ walkToActivePrinter = function()
         local targetPrompt = nil
         local foundActive = false
 
+        -- 2. Sistem Polling / Retry Deteksi Printer Aktif
         local attempts = 0
         while not foundActive and attempts < 15 do
             attempts = attempts + 1
 
             for i = 1, 5 do
-                local pName = "Print_" .. tostring(i)
+                local pName = "Print_" .. i
                 local printerModel = ComputersFolder:FindFirstChild(pName)
                 
                 if printerModel then
@@ -220,67 +172,67 @@ walkToActivePrinter = function()
             end
         end
 
+        -- 3. Eksekusi Perjalanan ke Printer Target
         if targetPos and targetPrinterName then
-            local path = PathfindingService:CreatePath({
-                AgentRadius = 2,
-                AgentHeight = 5,
-                AgentCanJump = true
-            })
-
-            path:ComputeAsync(hrp.Position, targetPos + Vector3.new(0, 0, 1.5))
+            print("[Keren Hub] Menuju ke tujuan aktif: " .. targetPrinterName)
             
-            if path.Status == Enum.PathStatus.Success then
-                local waypoints = path:GetWaypoints()
-                for _, waypoint in ipairs(waypoints) do
-                    humanoid:MoveTo(waypoint.Position)
-                    if waypoint.Action == Enum.PathWaypointAction.Jump then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    end
-                    
-                    local reached = false
-                    local conn
-                    conn = humanoid.MoveToFinished:Connect(function()
-                        reached = true
-                        if conn then conn:Disconnect() end
-                    end)
-                    
-                    local t = tick()
-                    while not reached and (tick() - t) < 0.8 do
-                        task.wait(0.05)
-                    end
-                    if conn then conn:Disconnect() end
-                end
-            else
-                humanoid:MoveTo(targetPos)
-                task.wait(1.5)
-            end
-
+            -- Jalan kaki pakai pathfinding ke printer
+            walkToPosition(targetPos + Vector3.new(0, 0, 1.5))
             task.wait(0.3)
+
+            -- Langsung interaksi ProximityPrompt (Tanpa lompat pertama)
             if targetPrompt and fireproximityprompt then
                 fireproximityprompt(targetPrompt)
+                print("• Berhasil interaksi dengan " .. targetPrinterName)
+            else
+                print("[Keren Hub] Warning: Gagal mengeksekusi fireproximityprompt.")
             end
 
-            -- Tunggu sampai soal math / WorkGui selesai dikerjakan & tertutup
-            local timeout = tick() + 12
-            while tick() < timeout do
-                local workGui = PlayerGui:FindFirstChild("WorkGui")
-                if not workGui then
-                    break -- Keluar loop kalau WorkGui udah hilang (tugas beres)
+            -- Tunggu sampai WorkGui (soal math) muncul
+            local startTime = tick()
+            local workGuiFound = false
+            while tick() - startTime < 4 do
+                if PlayerGui:FindFirstChild("WorkGui") then
+                    workGuiFound = true
+                    break
                 end
-                task.wait(0.5)
+                task.wait(0.1)
             end
 
-            task.wait(1)
-            -- Jalan kaki balik ke kursi yang SESUAI dengan printer tempat dia baru kerja
+            -- Tunggu sampai semua soal math selesai dikerjakan (WorkGui tertutup)
+            if workGuiFound then
+                while PlayerGui:FindFirstChild("WorkGui") do
+                    task.wait(0.2)
+                end
+                print("[Keren Hub] Semua soal math selesai dikerjakan!")
+            else
+                task.wait(2)
+            end
+
+            task.wait(0.5)
+
+            -- JUMP FIX: Lompat sekali pas semua soal beres sebelum jalan balik
+            if humanoid then
+                humanoid.Sit = false
+                humanoid.PlatformStand = false
+                task.wait(0.1)
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                humanoid.Jump = true
+                print("[Keren Hub] Soal selesai -> Karakter melompat!")
+                task.wait(0.8)
+            end
+
+            -- Jalan kaki balik ke kursi printer yang sesuai
             returnToSeat(targetPrinterName)
+        else
+            print("[Keren Hub] Gagal mendeteksi tujuan printer aktif (Waktu tunggu habis).")
         end
     end)
 end
 
--- Daftarkan fungsi ke global environment supaya bisa dikontrol dari Yobuy.lua
-getgenv().RunManualPrinter = walkToActivePrinter
-getgenv().RunInitialFarm = startInitialFarm
-
+-- ==========================================
+-- FUNGSI AUTO SOLVER GUI (MATEMATIKA)
+-- ==========================================
 local function solveOfficeTask()
     pcall(function()
         local workGui = PlayerGui:FindFirstChild("WorkGui")
@@ -338,17 +290,21 @@ local function solveOfficeTask()
     end)
 end
 
+-- ==========================================
+-- LOOP & EVENT LISTENER UTAMA
+-- ==========================================
 task.spawn(function()
-    while true do
-        if getgenv().AutoFarmActive then
-            solveOfficeTask()
-        end
+    while AutoFarmActive do
         task.wait(1)
+        solveOfficeTask()
     end
 end)
 
 AssignPrintJob.OnClientEvent:Connect(function()
-    if not getgenv().AutoFarmActive then return end
+    if not AutoFarmActive then return end
     task.wait(0.5)
     walkToActivePrinter()
 end)
+
+-- Eksekusi manual testing jika dibutuhkan
+getgenv().RunManualPrinter = walkToActivePrinter
